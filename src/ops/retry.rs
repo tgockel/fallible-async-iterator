@@ -1,3 +1,8 @@
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+};
+
 use crate::FallibleAsyncIterator;
 
 #[derive(Clone)]
@@ -9,21 +14,26 @@ pub struct Retry<I, H> {
 impl<I, H, E> FallibleAsyncIterator for Retry<I, H>
 where
     I: FallibleAsyncIterator,
-    H: FnMut(I::Error) -> Result<(), E>,
+    H: Fn(I::Error) -> Result<(), E>,
 {
     type Item = I::Item;
     type Error = E;
 
-    async fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<Option<Self::Item>, Self::Error>> {
         loop {
-            match self.iter.next().await {
-                Ok(x) => break Ok(x),
-                Err(e) => {
-                    // try to handle the error
-                    let Err(e) = (self.handle)(e) else {
-                        continue;
-                    };
-                    break Err(e);
+            // safety: we do not move out of ourselves or the argument
+            let iter = unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.iter) };
+            let Poll::Ready(intermediate) = iter.poll_next(cx) else {
+                return Poll::Pending;
+            };
+            match intermediate {
+                Ok(normal) => return Poll::Ready(Ok(normal)),
+                Err(ex) => {
+                    if let Err(handled) = (self.handle)(ex) {
+                        return Poll::Ready(Err(handled));
+                    }
+                    // error was handled -- continue to loop
+                    continue;
                 }
             }
         }

@@ -15,7 +15,6 @@ In this library, `next` returning an `Err` state means that it failed to reach t
 With an [`AsyncIterator`][async-iterator], `Some(Err(...))` means that the item itself is an error, but iteration
 performed successfully.
 
-### Why not `___-stream`?
-
 [async-iterator]: https://crates.io/crates/async-iterator
 [fallible-iterator]: https://crates.io/crates/fallible-iterator
+[tokio-stream]: https://crates.io/crates/tokio-stream/

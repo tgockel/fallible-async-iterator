@@ -5,7 +5,12 @@ pub use adaptors::*;
 mod ops;
 pub use ops::*;
 
-use std::fmt;
+use std::{
+    fmt,
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub trait FallibleAsyncIterator {
@@ -15,7 +20,14 @@ pub trait FallibleAsyncIterator {
     /// The error condition yielded on unsuccessful iteration.
     type Error;
 
-    async fn next(&mut self) -> Result<Option<Self::Item>, Self::Error>;
+    /// Attempt to poll the next value of this iterator. When using this iterator, you most likely want to use the
+    /// [`next`][`FallibleAsyncIterator::next`] function instead.
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Option<Self::Item>, Self::Error>>;
+
+    /// Get the next value of the iterator.
+    fn next(&mut self) -> impl Future<Output = Result<Option<Self::Item>, Self::Error>> {
+        NextFuture { iter: self }
+    }
 
     /// Returns the bounds on the remaining length of the iterator.
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -197,5 +209,19 @@ impl<I, T: fmt::Debug, E: fmt::Debug> fmt::Debug for Interrupted<I, T, E> {
             .field("with", &self.with)
             .field("partial", &self.have)
             .finish()
+    }
+}
+
+/// See [`FallibleAsyncIterator::next`].
+struct NextFuture<'a, I: ?Sized> {
+    iter: &'a mut I,
+}
+
+impl<'a, I: FallibleAsyncIterator + ?Sized> Future for NextFuture<'a, I> {
+    type Output = Result<Option<I::Item>, I::Error>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let iter = unsafe { self.map_unchecked_mut(|s| s.iter) };
+        iter.poll_next(cx)
     }
 }
