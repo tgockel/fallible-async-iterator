@@ -1,0 +1,14 @@
+[package]
+name = "fallible-async-iterator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
+tokio = { version = "^1.39.2", default-features = false, features = ["macros", "rt"] }
+tokio-test = "^0.4.4"
+
+[features]
+default = []
+nightly-extend-one = []
