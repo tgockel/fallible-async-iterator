@@ -39,29 +39,15 @@ pub trait FallibleAsyncIterator {
     ///
     /// ## Note
     /// Other reduce methods on this trait are implemented in terms of this `fold` operation.
-    async fn fold<B>(
-        self,
-        init: B,
-        mut combine: impl FnMut(B, Self::Item) -> B,
-    ) -> Result<B, Interrupted<Self, B, Self::Error>>
+    fn fold<B, F: FnMut(B, Self::Item) -> B>(self, init: B, combine: F) -> Fold<Self, B, F>
     where
         Self: Sized,
     {
-        let mut iter = self;
-        let mut building = init;
-        while let Some(intermediate) = iter.next().await.transpose() {
-            match intermediate {
-                Ok(val) => building = combine(building, val),
-                Err(e) => {
-                    return Err(Interrupted {
-                        iter,
-                        have: building,
-                        with: e,
-                    })
-                }
-            }
+        Fold {
+            iter: Some(self),
+            building: Some(init),
+            combine,
         }
-        Ok(building)
     }
 
     /// Count the elements in the iterator. On interruption, the number of items counted so far is returned.
@@ -78,11 +64,11 @@ pub trait FallibleAsyncIterator {
     /// assert_eq!(10, counted);
     /// # })
     /// ```
-    async fn count(self) -> Result<usize, Interrupted<Self, usize, Self::Error>>
+    fn count(self) -> impl Future<Output = Result<usize, Interrupted<Self, usize, Self::Error>>>
     where
         Self: Sized,
     {
-        self.fold(0, |c, _| c + 1).await
+        self.fold(0, |c, _| c + 1)
     }
 
     /// ```
