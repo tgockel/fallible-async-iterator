@@ -115,6 +115,28 @@ pub trait FallibleAsyncIterator {
         }
     }
 
+    /// Takes a closure and returns an iterator which returns the `transform`ed elements.
+    ///
+    /// ```
+    /// # use fallible_async_iterator::*;
+    /// # tokio_test::block_on(async {
+    /// let values: Vec<_> = [1, 2, 3]
+    ///     .into_iter()
+    ///     .into_fallible_async()
+    ///     .map(|x| x * 2)
+    ///     .collect()
+    ///     .await
+    ///     .unwrap();
+    /// assert_eq!([2, 4, 6], *values);
+    /// # })
+    /// ```
+    fn map<F>(self, transform: F) -> Map<Self, F>
+    where
+        Self: Sized,
+    {
+        Map { iter: self, transform }
+    }
+
     /// When the iterator returns an error case, automatically retry the call if it is `handle`d.
     ///
     /// ## `handle`: `FnMut(Self::Error) -> Result<(), UError>`
