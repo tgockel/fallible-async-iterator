@@ -6,11 +6,14 @@ license = "Apache-2.0"
 authors = ["Travis Gockel <travis@gockelhut.com>"]
 
 [dependencies]
+futures-core = { version = "^0.3.30", optional = true }
 
 [dev-dependencies]
-tokio = { version = "^1.39.2", default-features = false, features = ["macros", "rt"] }
+async-stream = "^0.3.5"
+tokio = { version = "^1.39.2", default-features = false, features = ["macros", "rt", "time"] }
 tokio-test = "^0.4.4"
 
 [features]
 default = []
+futures-core = ["dep:futures-core"]
 nightly-extend-one = []
