@@ -1,4 +1,5 @@
 #![allow(async_fn_in_trait)]
+#![cfg_attr(feature = "nightly-extend-one", feature(extend_one))]
 
 mod adaptors;
 pub use adaptors::*;
