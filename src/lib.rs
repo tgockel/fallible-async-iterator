@@ -115,6 +115,29 @@ pub trait FallibleAsyncIterator {
         }
     }
 
+    /// Perform an `action` on each item yielded from this iterator.
+    ///
+    /// ```
+    /// # use fallible_async_iterator::*;
+    /// # tokio_test::block_on(async {
+    /// let mut output = Vec::new();
+    /// [1, 2, 3]
+    ///     .into_iter()
+    ///     .into_fallible_async()
+    ///     .for_each(|item| output.push(item))
+    ///     .await
+    ///     .unwrap();
+    /// assert_eq!([1, 2, 3], *output);
+    /// # })
+    /// ```
+    fn for_each<F>(self, mut action: F) -> impl Future<Output = Result<(), Interrupted<Self, (), Self::Error>>>
+    where
+        Self: Sized,
+        F: FnMut(Self::Item),
+    {
+        self.fold((), move |(), item| action(item))
+    }
+
     /// Takes a closure and returns an iterator which returns the `transform`ed elements.
     ///
     /// ```
