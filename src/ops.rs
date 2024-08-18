@@ -6,3 +6,6 @@ pub use map::*;
 
 mod retry;
 pub use retry::*;
+
+mod transpose;
+pub use transpose::*;

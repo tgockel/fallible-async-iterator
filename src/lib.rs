@@ -209,6 +209,37 @@ pub trait FallibleAsyncIterator {
     {
         Retry { iter: self, handle }
     }
+
+    /// Extract the `Err` from item and expose it as the `Error` type.
+    ///
+    /// When this iterator's `Item` is a [`Result`] and the `Error` is [`Infallible`][`std::convert::Infallible`], this
+    /// function lifts the `Err` results into the [`Error`][`FallibleAsyncIterator::Error`] and puts `Ok` results as the
+    /// [`Item`][`FallibleAsyncIterator::Item`].
+    ///
+    /// This function is useful for converting from sources whose iterators give you a [`Result`] and the error
+    /// condition aligns with this library's expectations of errors.
+    ///
+    /// ```
+    /// # use fallible_async_iterator::*;
+    /// # tokio_test::block_on(async {
+    /// let count =
+    ///     [Ok(1), Ok(2), Ok(3), Err("error"), Ok(4), Err("another"), Ok(5)]
+    ///     .into_iter()
+    ///     .into_fallible_async()
+    ///     .transpose()                 // <- convert internal `Err` into iterator `Error`s
+    ///     .retry(|_| Ok::<(), ()>(())) // <- fake error handler just discards
+    ///     .count()
+    ///     .await
+    ///     .unwrap();
+    /// assert_eq!(5, count);
+    /// # })
+    /// ```
+    fn transpose(self) -> Transpose<Self>
+    where
+        Self: Sized,
+    {
+        Transpose { iter: self }
+    }
 }
 
 /// Trait for types which can convert into a [`FallibleAsyncIterator`]. This is equivalent to the standard library's
