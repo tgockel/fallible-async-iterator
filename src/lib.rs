@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "nightly-async-iterator", feature(async_iterator))]
 #![cfg_attr(feature = "nightly-extend-one", feature(extend_one))]
 
 mod adaptors;
