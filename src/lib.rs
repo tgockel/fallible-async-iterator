@@ -65,7 +65,7 @@ pub trait FallibleAsyncIterator {
     /// assert_eq!(10, counted);
     /// # })
     /// ```
-    fn count(self) -> impl Future<Output = Result<usize, Interrupted<Self, usize, Self::Error>>>
+    fn count(self) -> Fold<Self, usize, fn(usize, Self::Item) -> usize>
     where
         Self: Sized,
     {
@@ -105,7 +105,7 @@ pub trait FallibleAsyncIterator {
     /// has a [`size_hint`][`FallibleAsyncIterator::size_hint`]. This can be enabled with the `nightly-extend-one`
     /// feature, which enables this functionality with [`Extend::extend_reserve`] (which is an unstable API as of Rust
     /// 1.80).
-    fn collect<B>(self) -> impl Future<Output = Result<B, Interrupted<Self, B, Self::Error>>>
+    fn collect<B>(self) -> Fold<Self, B, fn(B, Self::Item) -> B>
     where
         B: Extend<Self::Item> + Default,
         Self: Sized,
@@ -134,7 +134,7 @@ pub trait FallibleAsyncIterator {
     fn collect_into<Target>(
         self,
         collection: &mut Target,
-    ) -> impl Future<Output = Result<&mut Target, Interrupted<Self, &mut Target, Self::Error>>>
+    ) -> Fold<Self, &mut Target, fn(&mut Target, Self::Item) -> &mut Target>
     where
         Target: Extend<Self::Item>,
         Self: Sized,
@@ -168,12 +168,17 @@ pub trait FallibleAsyncIterator {
     /// assert_eq!([1, 2, 3], *output);
     /// # })
     /// ```
-    fn for_each<F>(self, mut action: F) -> impl Future<Output = Result<(), Interrupted<Self, (), Self::Error>>>
+    fn for_each<F>(self, action: F) -> FoldWith<Self, F, ()>
     where
         Self: Sized,
         F: FnMut(Self::Item),
     {
-        self.fold((), move |(), item| action(item))
+        FoldWith {
+            iter: Some(self),
+            context: action,
+            building: Some(()),
+            combine: |action, (), item| action(item),
+        }
     }
 
     /// Takes a closure and returns an iterator which returns the `transform`ed elements.
@@ -314,6 +319,7 @@ impl<'a, I: FallibleAsyncIterator + ?Sized> Future for NextFuture<'a, I> {
     type Output = Result<Option<I::Item>, I::Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // safety: `iter` will not be moved-from, as we have an exclusive borrow
         let iter = unsafe { self.map_unchecked_mut(|s| s.iter) };
         iter.poll_next(cx)
     }

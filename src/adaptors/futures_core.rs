@@ -39,6 +39,10 @@ where
         let stream = unsafe { self.map_unchecked_mut(|s| &mut s.stream) };
         stream.poll_next(cx).map(Ok)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.stream.size_hint()
+    }
 }
 
 #[cfg(test)]

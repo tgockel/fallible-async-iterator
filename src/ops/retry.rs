@@ -5,7 +5,8 @@ use std::{
 
 use crate::FallibleAsyncIterator;
 
-#[derive(Clone)]
+/// The return type of the [`retry`][`FallibleAsyncIterator::retry`] operation.
+#[derive(Clone, Copy, Debug)]
 pub struct Retry<I, H> {
     pub(crate) iter: I,
     pub(crate) handle: H,
@@ -21,7 +22,7 @@ where
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<Option<Self::Item>, Self::Error>> {
         loop {
-            // safety: we do not move out of ourselves or the argument
+            // safety: projection pin of field we own
             let iter = unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.iter) };
             let Poll::Ready(intermediate) = iter.poll_next(cx) else {
                 return Poll::Pending;
