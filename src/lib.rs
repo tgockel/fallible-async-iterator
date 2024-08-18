@@ -1,5 +1,8 @@
 #![cfg_attr(feature = "nightly-async-iterator", feature(async_iterator))]
 #![cfg_attr(feature = "nightly-extend-one", feature(extend_one))]
+// To fix this, we need to create dedicated types for the FallibleAsyncIterator operations which return things like
+// `Fold<Self, Blah, fn(Blah, Self::Item) -> Blah>`.
+#![allow(clippy::type_complexity)]
 
 mod adaptors;
 pub use adaptors::*;

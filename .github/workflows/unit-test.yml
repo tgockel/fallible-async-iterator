@@ -1,0 +1,52 @@
+name: unit-test
+
+on:
+  push:
+    branches: [ "trunk" ]
+  pull_request:
+    branches: [ "trunk" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  unit-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cxt:
+          - toolchain: stable
+            features: "std"
+          - toolchain: stable
+            features: "std,futures-core"
+          - toolchain: beta
+            features: "std"
+          - toolchain: beta
+            features: "std,futures-core"
+          - toolchain: nightly
+            features: "std"
+          - toolchain: nightly
+            features: "std,futures-core"
+          - toolchain: nightly
+            features: "std,nightly-async-iterator"
+          - toolchain: nightly
+            features: "std,nightly-extend-one"
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.cxt.toolchain }} && rustup default ${{ matrix.cxt.toolchain }}
+      - run: cargo test --verbose --no-default-features --features ${{ matrix.cxt.features }}
+      - run: cargo test --verbose --release --no-default-features --features ${{ matrix.cxt.features }}
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo fmt --check
+      - run: cargo clippy
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo doc --verbose
