@@ -1,4 +1,8 @@
-use std::{convert::Infallible, task::Poll};
+use core::{
+    convert::Infallible,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use futures_core::Stream;
 
@@ -32,10 +36,7 @@ where
     type Item = S::Item;
     type Error = Infallible;
 
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context,
-    ) -> Poll<Result<Option<Self::Item>, Self::Error>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Option<Self::Item>, Self::Error>> {
         let stream = unsafe { self.map_unchecked_mut(|s| &mut s.stream) };
         stream.poll_next(cx).map(Ok)
     }
@@ -47,10 +48,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    #![allow(unused)]
+
+    use core::time::Duration;
 
     use crate::{FallibleAsyncIterator, FuturesCoreStreamExt};
 
+    #[cfg(feature = "std")]
     #[tokio::test]
     async fn stream_into_vec() {
         let s = async_stream::stream! {

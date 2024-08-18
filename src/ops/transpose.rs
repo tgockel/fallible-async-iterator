@@ -1,4 +1,4 @@
-use std::{
+use core::{
     convert::Infallible,
     pin::Pin,
     task::{Context, Poll},

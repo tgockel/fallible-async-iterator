@@ -1,4 +1,4 @@
-use std::{
+use core::{
     async_iter::AsyncIterator,
     convert::Infallible,
     pin::Pin,

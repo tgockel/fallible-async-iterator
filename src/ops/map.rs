@@ -1,3 +1,8 @@
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
+
 use crate::FallibleAsyncIterator;
 
 /// Return type of the [`map`][`FallibleAsyncIterator::map`] operation.
@@ -15,10 +20,7 @@ where
     type Item = R;
     type Error = I::Error;
 
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context,
-    ) -> std::task::Poll<Result<Option<Self::Item>, Self::Error>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Option<Self::Item>, Self::Error>> {
         // safety: projection pin of field we own
         let iter = unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.iter) };
         iter.poll_next(cx).map_ok(|item| {

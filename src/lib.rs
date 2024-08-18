@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly-async-iterator", feature(async_iterator))]
 #![cfg_attr(feature = "nightly-extend-one", feature(extend_one))]
 // To fix this, we need to create dedicated types for the FallibleAsyncIterator operations which return things like
@@ -9,7 +10,7 @@ pub use adaptors::*;
 mod ops;
 pub use ops::*;
 
-use std::{
+use core::{
     fmt,
     future::Future,
     pin::Pin,

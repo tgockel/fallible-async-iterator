@@ -1,4 +1,8 @@
-use std::{convert::Infallible, task::Poll};
+use core::{
+    convert::Infallible,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use crate::FallibleAsyncIterator;
 
@@ -27,10 +31,7 @@ impl<I: Iterator + Unpin> FallibleAsyncIterator for IteratorAdaptor<I> {
     type Item = I::Item;
     type Error = Infallible;
 
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<Option<Self::Item>, Self::Error>> {
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<Option<Self::Item>, Self::Error>> {
         Poll::Ready(Ok(self.iter.next()))
     }
 

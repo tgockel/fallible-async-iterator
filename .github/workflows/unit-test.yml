@@ -15,28 +15,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        cxt:
-          - toolchain: stable
-            features: "std"
-          - toolchain: stable
-            features: "std,futures-core"
-          - toolchain: beta
-            features: "std"
-          - toolchain: beta
-            features: "std,futures-core"
+        config:
+          - ""
+          - --release
+        toolchain:
+          - stable
+          - beta
+          - nightly
+        features:
+          - ""
+          - --no-default-features
+          - --features futures-core
+          - --no-default-features --features futures-core
+        include:
           - toolchain: nightly
-            features: "std"
+            features: --features nightly-async-iterator
           - toolchain: nightly
-            features: "std,futures-core"
-          - toolchain: nightly
-            features: "std,nightly-async-iterator"
-          - toolchain: nightly
-            features: "std,nightly-extend-one"
+            features: --features nightly-extend-one
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.cxt.toolchain }} && rustup default ${{ matrix.cxt.toolchain }}
-      - run: cargo test --verbose --no-default-features --features ${{ matrix.cxt.features }}
-      - run: cargo test --verbose --release --no-default-features --features ${{ matrix.cxt.features }}
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: cargo build --verbose ${{ matrix.config }} ${{ matrix.features }}
+      - run: cargo test --verbose ${{ matrix.config }} ${{ matrix.features }}
   lint:
     name: Lint
     runs-on: ubuntu-latest
