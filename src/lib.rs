@@ -1,4 +1,3 @@
-#![allow(async_fn_in_trait)]
 #![cfg_attr(feature = "nightly-extend-one", feature(extend_one))]
 
 mod adaptors;
@@ -84,18 +83,57 @@ pub trait FallibleAsyncIterator {
     /// assert_eq!([5, 5, 5, 5], *values);
     /// # })
     /// ```
-    async fn collect<B>(self) -> Result<B, Interrupted<Self, B, Self::Error>>
+    ///
+    /// ## Note
+    /// Unlike the Rust Standard Library's [`Iterator::collect`] function, there is no equivalent to the
+    /// [`FromIterator`] trait for the target container to collect into. Instead, functionality is built on top of the
+    /// [`Extend`] and [`Default`] traits. This is done for a few reasons:
+    ///
+    /// 1. There is not an obvious way to implement a `FromIterator` equivalent without having an `async` trait (which
+    ///    is unstable and will be for the forseeable future).
+    /// 2. This unifies behavior with the [`collect_into`][`FallibleAsyncIterator::collect_into`] functionality, which
+    ///    only requires you can `extend` from items.
+    /// 3. There are a [`Extend`] implementations for many types, but no implementations for a hypothetical
+    ///    `FromFallibleAsyncIterator` trait, so it is easier to get support for a lot of types by just calling their
+    ///    `Extend` implementation.
+    ///
+    /// If your target container is not default-constructible, construct it ahead-of-time and use
+    /// [`collect_into`][`FallibleAsyncIterator::collect_into`] instead.
+    ///
+    /// A downside to this approach is that you do not get the reserve space for your container when the source iterator
+    /// has a [`size_hint`][`FallibleAsyncIterator::size_hint`]. This can be enabled with the `nightly-extend-one`
+    /// feature, which enables this functionality with [`Extend::extend_reserve`] (which is an unstable API as of Rust
+    /// 1.80).
+    fn collect<B>(self) -> impl Future<Output = Result<B, Interrupted<Self, B, Self::Error>>>
     where
-        B: FromFallibleAsyncIterator<Self::Item>,
+        B: Extend<Self::Item> + Default,
         Self: Sized,
     {
-        B::from_fallible_async_iter(self).await
+        #[allow(unused_mut)]
+        let mut collection: B = Default::default();
+        #[cfg(feature = "nightly-extend-one")]
+        if let Some(reserve) = self.size_hint().1 {
+            collection.extend_reserve(reserve);
+        }
+
+        self.fold(collection, |mut collection, item| {
+            #[cfg(feature = "nightly-extend-one")]
+            collection.extend_one(item);
+            #[cfg(not(feature = "nightly-extend-one"))]
+            collection.extend(Some(item));
+            collection
+        })
     }
 
-    async fn collect_into<Target>(
+    /// Collect the items yielded from this iterator into the `collection`.
+    ///
+    /// This function is similar to [`collect`][`FallibleAsyncIterator::collect`], but operates on a collection you have
+    /// created ahead-of-time. This is useful for appending to an already-existing container or when the target
+    /// container does not have a [`Default`] implementation.
+    fn collect_into<Target>(
         self,
         collection: &mut Target,
-    ) -> Result<&mut Target, Interrupted<Self, &mut Target, Self::Error>>
+    ) -> impl Future<Output = Result<&mut Target, Interrupted<Self, &mut Target, Self::Error>>>
     where
         Target: Extend<Self::Item>,
         Self: Sized,
@@ -105,14 +143,13 @@ pub trait FallibleAsyncIterator {
             collection.extend_reserve(reserve);
         }
 
-        match self.fold((), |(), item| collection.extend(Some(item))).await {
-            Ok(()) => Ok(collection),
-            Err(partial) => Err(Interrupted {
-                iter: partial.iter,
-                have: collection,
-                with: partial.with,
-            }),
-        }
+        self.fold(collection, |collection, item| {
+            #[cfg(feature = "nightly-extend-one")]
+            collection.extend_one(item);
+            #[cfg(not(feature = "nightly-extend-one"))]
+            collection.extend(Some(item));
+            collection
+        })
     }
 
     /// Perform an `action` on each item yielded from this iterator.
@@ -191,14 +228,6 @@ impl<I: FallibleAsyncIterator> IntoFallibleAsyncIterator for I {
     fn into_fallible_async_iter(self) -> Self::IntoFallibleAsyncIter {
         self
     }
-}
-
-pub trait FromFallibleAsyncIterator<A>: Sized {
-    async fn from_fallible_async_iter<I>(
-        iter: I,
-    ) -> Result<Self, Interrupted<I::IntoFallibleAsyncIter, Self, I::Error>>
-    where
-        I: IntoFallibleAsyncIterator<Item = A>;
 }
 
 /// Represents the error state when an iterator was interrupted while performing a folding operation. It contains the

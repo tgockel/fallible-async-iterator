@@ -1,6 +1,6 @@
 use std::{convert::Infallible, task::Poll};
 
-use crate::{FallibleAsyncIterator, FromFallibleAsyncIterator, IntoFallibleAsyncIterator};
+use crate::FallibleAsyncIterator;
 
 /// Adapts a `std::iter::Iterator` into a [`FallibleAsyncIterator`].
 pub struct IteratorAdaptor<I> {
@@ -36,22 +36,5 @@ impl<I: Iterator> IteratorExt for I {
         Self: Iterator<Item = T> + Sized,
     {
         IteratorAdaptor { iter: self }
-    }
-}
-
-impl<A> FromFallibleAsyncIterator<A> for Vec<A> {
-    async fn from_fallible_async_iter<I>(
-        iter: I,
-    ) -> Result<Self, crate::Interrupted<I::IntoFallibleAsyncIter, Self, I::Error>>
-    where
-        I: IntoFallibleAsyncIterator<Item = A>,
-    {
-        let iter = iter.into_fallible_async_iter();
-        let init = Vec::with_capacity(iter.size_hint().1.unwrap_or_default());
-        iter.fold(init, |mut out, item| {
-            out.push(item);
-            out
-        })
-        .await
     }
 }
