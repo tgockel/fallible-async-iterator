@@ -185,6 +185,29 @@ pub trait FallibleAsyncIterator {
         }
     }
 
+    /// Consumes the iterator, returning the last element.
+    ///
+    /// If the underlying iterator yields an `Err`, it is returned as an `Err`.
+    ///
+    /// ```
+    /// # use fallible_async_iterator::*;
+    /// # tokio_test::block_on(async {
+    /// let last = [1, 2, 3]
+    ///     .into_iter()
+    ///     .into_fallible_async()
+    ///     .last()
+    ///     .await;
+    /// assert!(last.is_ok());
+    /// assert_eq!(last.unwrap(), Some(3));
+    /// # })
+    /// ```
+    fn last(self) -> Fold<Self, Option<Self::Item>, fn(Option<Self::Item>, Self::Item) -> Option<Self::Item>>
+    where
+        Self: Sized,
+    {
+        self.fold(None, |_, item| Some(item))
+    }
+
     /// Takes a closure and returns an iterator which returns the `transform`ed elements.
     ///
     /// ```
