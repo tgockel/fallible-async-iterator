@@ -157,6 +157,29 @@ pub trait FallibleAsyncIterator {
         })
     }
 
+    /// Only yield items which match the `predicate`.
+    ///
+    /// ```
+    /// # use fallible_async_iterator::*;
+    /// # tokio_test::block_on(async {
+    /// let values: Vec<_> = [1, 2, 3, 4, 5, 6, 7]
+    ///     .into_iter()
+    ///     .into_fallible_async()
+    ///     .filter(|x| x % 2 == 0)
+    ///     .collect()
+    ///     .await
+    ///     .unwrap();
+    /// assert_eq!([2, 4, 6], *values);
+    /// # })
+    /// ```
+    fn filter<P>(self, predicate: P) -> Filter<Self, P>
+    where
+        Self: Sized,
+        P: FnMut(&Self::Item) -> bool,
+    {
+        Filter { iter: self, predicate }
+    }
+
     /// Perform an `action` on each item yielded from this iterator.
     ///
     /// ```

@@ -1,3 +1,6 @@
+mod filter;
+pub use filter::*;
+
 mod fold;
 pub use fold::*;
 
