@@ -180,6 +180,15 @@ pub trait FallibleAsyncIterator {
         Filter { iter: self, predicate }
     }
 
+    /// A combination of [`filter`][`FallibleAsyncIterator::filter`] and [`map`][`FallibleAsyncIterator::map`].
+    fn filter_map<U, F>(self, transform: F) -> FilterMap<Self, F>
+    where
+        Self: Sized,
+        F: FnMut(Self::Item) -> Option<U>,
+    {
+        FilterMap { iter: self, transform }
+    }
+
     /// Perform an `action` on each item yielded from this iterator.
     ///
     /// ```

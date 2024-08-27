@@ -42,3 +42,45 @@ where
         self.iter.size_hint()
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct FilterMap<I, F> {
+    pub(crate) iter: I,
+    pub(crate) transform: F,
+}
+
+impl<I, F, U> FallibleAsyncIterator for FilterMap<I, F>
+where
+    I: FallibleAsyncIterator,
+    F: FnMut(I::Item) -> Option<U>,
+{
+    type Item = U;
+    type Error = I::Error;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Option<Self::Item>, Self::Error>> {
+        loop {
+            // safety: projection pin of a field we own
+            let iter = unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.iter) };
+            let Poll::Ready(potential) = iter.poll_next(cx) else {
+                return Poll::Pending;
+            };
+            match potential {
+                Ok(None) => return Poll::Ready(Ok(None)),
+                Err(err) => return Poll::Ready(Err(err)),
+                Ok(Some(item)) => {
+                    // safety: we do not move out of the predicate, we just call it
+                    let transform = unsafe { &mut self.as_mut().get_unchecked_mut().transform };
+                    let Some(new_val) = transform(item) else {
+                        // no match -- try again
+                        continue;
+                    };
+                    return Poll::Ready(Ok(Some(new_val)));
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
