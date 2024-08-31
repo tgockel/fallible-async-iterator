@@ -51,8 +51,8 @@ where
                 Err(e) => {
                     return Poll::Ready(Err(Interrupted {
                         iter: this.iter.take().unwrap(),
-                        have: building,
-                        with: e,
+                        partial: building,
+                        cause: e,
                     }))
                 }
             };
@@ -99,8 +99,8 @@ where
                 Err(e) => {
                     return Poll::Ready(Err(Interrupted {
                         iter: this.iter.take().unwrap(),
-                        have: building,
-                        with: e,
+                        partial: building,
+                        cause: e,
                     }))
                 }
             };

@@ -1,3 +1,74 @@
+//! The major motivator for this library is correctly dealing with asynchronous operations which might fail. Typical
+//! fallible iteration in Rust uses `Iterator<Item = Result<T, E>>`. The issue with this is the `Err` case is
+//! essentially different from the `Ok` case. The iterator did not actually yield an item; it yielded an error. This
+//! can lead to bugs when trying to compose operations using the standard `Iterator` transformer functions.
+//!
+//! As an example, reading records from a remote database might encounter transient network issues. Consider the
+//! sequence of events: you read 3 records, there is a minor network glitch, then you read 2 more records. Using a
+//! standard `Iterator<Result<i32, &str>>`, you might want to count these things:
+//!
+//! ```
+//! let count = [Ok(1), Ok(2), Ok(3), Err("transient"), Ok(4), Ok(5)]
+//!     .into_iter()
+//!     .count();
+//! assert_eq!(6, count);
+//! ```
+//!
+//! The problem is that you did not actually count 6 things, you only counted 5 things and experienced one error.
+//!
+//! This library's [`FallibleAsyncIterator`] approaches errors through explicitly handling them. This approach means it
+//! is harder to make mistakes by omission. All of the fold-like operations on a `FallibleAsyncIterator` can error with
+//! a special [`Interrupted`] value, which contains the reason for interruption, the partially-evaluated state, and an
+//! iterator so the operation can be resumed if you wish to.
+//!
+//! For example, this is the example above using [`count`][`FallibleAsyncIterator::count`]:
+//!
+//! ```
+//! # use fallible_async_iterator::*;
+//! # tokio_test::block_on(async {
+//! let iter = [Ok(1), Ok(2), Ok(3), Err("transient"), Ok(4), Ok(5)]
+//!     .into_iter()
+//!     .transpose_into_fallible_async();
+//!
+//! // Our attempt to count will end in an `Err`
+//! let count = iter.count().await;
+//! assert!(count.is_err());
+//!
+//! // The state can be investigated
+//! let Interrupted { iter, partial, cause } = count.unwrap_err();
+//! assert_eq!(cause, "transient");
+//! assert_eq!(partial, 3);
+//!
+//! // The interrupted iterator can be resumed
+//! let remaining = iter.count().await.unwrap();
+//! assert_eq!(remaining, 2);
+//! assert_eq!(partial + remaining, 5); // <- the correct answer
+//! # })
+//! ```
+//!
+//! The "resume on transient failure" pattern is extremely common. To handle these cases, you can use the
+//! [`retry`][`FallibleAsyncIterator::retry`] function:
+//!
+//! ```
+//! # use fallible_async_iterator::*;
+//! # tokio_test::block_on(async {
+//! let count = [Ok(1), Ok(2), Ok(3), Err("transient"), Ok(4), Ok(5)]
+//!     .into_iter()
+//!     .transpose_into_fallible_async()
+//!     .retry(|msg| {
+//!         // Make a decision about if we can handle it or not
+//!         if msg == "transient" {
+//!             Ok(())
+//!         } else {
+//!             Err(msg)
+//!         }
+//!     })
+//!     .count()
+//!     .await
+//!     .unwrap();
+//! assert_eq!(count, 5);
+//! # })
+//! ```
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly-async-iterator", feature(async_iterator))]
 #![cfg_attr(feature = "nightly-extend-one", feature(extend_one))]
@@ -432,42 +503,40 @@ impl<I: FallibleAsyncIterator> IntoFallibleAsyncIterator for I {
 /// Represents the error state when an iterator was interrupted while performing a folding operation. It contains the
 /// error which occurred, the iterator as it was suspended, and the partial results.
 pub struct Interrupted<I, T, E> {
-    iter: I,
-    have: T,
-    with: E,
-}
+    /// The suspended iterator. This
+    pub iter: I,
 
-impl<I, T, E> Interrupted<I, T, E> {
     /// The partial results of the operation. The exact meaning varies per operation. For example, an interruption in
     /// [`FallibleAsyncIterator::count`] will contain the number of things counted so far.
-    pub fn partial(&self) -> &T {
-        &self.have
-    }
+    pub partial: T,
+
+    /// The value of the `Err` the iterator was interrupted with.
+    pub cause: E,
 }
 
 impl<I, T, E> From<Interrupted<I, T, E>> for Result<T, E> {
     fn from(value: Interrupted<I, T, E>) -> Self {
-        Err(value.with)
+        Err(value.cause)
     }
 }
 
 impl<I, T, E> From<Interrupted<I, T, E>> for (I, T, E) {
     fn from(value: Interrupted<I, T, E>) -> Self {
-        (value.iter, value.have, value.with)
+        (value.iter, value.partial, value.cause)
     }
 }
 
 impl<I, T, E> From<Interrupted<I, T, E>> for (T, E) {
     fn from(value: Interrupted<I, T, E>) -> Self {
-        (value.have, value.with)
+        (value.partial, value.cause)
     }
 }
 
 impl<I, T: fmt::Debug, E: fmt::Debug> fmt::Debug for Interrupted<I, T, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Interruped")
-            .field("with", &self.with)
-            .field("partial", &self.have)
+            .field("cause", &self.cause)
+            .field("partial", &self.partial)
             .finish()
     }
 }
