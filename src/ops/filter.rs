@@ -5,6 +5,7 @@ use core::{
 
 use crate::FallibleAsyncIterator;
 
+/// Return type of the [`filter`][`FallibleAsyncIterator::filter`] operation.
 #[derive(Clone, Copy, Debug)]
 pub struct Filter<I, P> {
     pub(crate) iter: I,
@@ -43,6 +44,7 @@ where
     }
 }
 
+/// Return type of the [`filter_map`][`FallibleAsyncIterator::filter_map`] operation.
 #[derive(Clone, Copy, Debug)]
 pub struct FilterMap<I, F> {
     pub(crate) iter: I,

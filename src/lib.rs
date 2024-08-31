@@ -17,6 +17,7 @@ use core::{
     task::{Context, Poll},
 };
 
+/// A trait for dealing with asynchronous iterators which might fail to iterate.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub trait FallibleAsyncIterator {
     /// The type this iterator yields on successful iteration.
@@ -217,6 +218,73 @@ pub trait FallibleAsyncIterator {
         }
     }
 
+    /// Call `observe` on each element successfully yielded from this iterator.
+    fn inspect<F>(self, observe: F) -> Inspect<Self, F>
+    where
+        Self: Sized,
+        F: FnMut(&Self::Item),
+    {
+        Inspect { iter: self, observe }
+    }
+
+    /// Call `observe` on each element successfully yielded from this iterator, resuming after the observer future has
+    /// completed.
+    ///
+    /// Because [`async` closures are unstable](https://github.com/rust-lang/rust/issues/62290), the easiest way to use
+    /// this is to handle your inspection logic first, then return an awaitable at the end. This works for simple cases
+    /// where the actual inspection happens in-band, but you might want to wait on something external later.
+    ///
+    /// ```
+    /// # use fallible_async_iterator::*;
+    /// # tokio_test::block_on(async {
+    /// # [1, 2, 3]
+    /// #     .into_iter()
+    /// #     .into_fallible_async()
+    ///     .inspect_async(|val| {
+    ///         println!("val = {val:?}");
+    ///         tokio::time::sleep(core::time::Duration::from_millis(5))
+    ///     })
+    /// #     .for_each(|_| ())
+    /// #     .await
+    /// #     .unwrap();
+    /// # })
+    /// ```
+    ///
+    /// If you need to use the value inside of the asynchronous operation, this has to be done manually (until Rust has
+    /// stable syntax for this). Note that the item is passed to you by reference.
+    ///
+    /// ```
+    /// # use fallible_async_iterator::*;
+    /// # tokio_test::block_on(async {
+    /// # [1, 2, 3]
+    /// #     .into_iter()
+    /// #     .into_fallible_async()
+    ///     .inspect_async(|val| {
+    ///         let val = *val; // <- copy what you need
+    ///         async move {
+    ///             println!("val = {val:?}"); // <- pretend this couldn't be done in-line
+    ///             tokio::time::sleep(core::time::Duration::from_millis(5)).await
+    ///         }
+    ///     })
+    /// #     .for_each(|_| ())
+    /// #     .await
+    /// #     .unwrap();
+    /// # })
+    /// ```
+    fn inspect_async<F, Fut>(self, observe: F) -> InspectAsync<Self, F, Self::Item, Fut>
+    where
+        Self: Sized,
+        F: FnMut(&Self::Item) -> Fut,
+        Fut: Future,
+    {
+        InspectAsync {
+            iter: self,
+            observe,
+            item: None,
+            observing_future: None,
+        }
+    }
+
     /// Consumes the iterator, returning the last element.
     ///
     /// If the underlying iterator yields an `Err`, it is returned as an `Err`.
@@ -262,6 +330,20 @@ pub trait FallibleAsyncIterator {
         Map { iter: self, transform }
     }
 
+    /// Takes an async closure and returns an iterator which returns the `transform`ed elements.
+    fn map_async<T, F>(self, transform: T) -> MapAsync<Self, T, F>
+    where
+        Self: Sized,
+        T: FnMut(Self::Item) -> F,
+        F: Future,
+    {
+        MapAsync {
+            iter: self,
+            transform,
+            in_progress: None,
+        }
+    }
+
     /// When the iterator returns an error case, automatically retry the call if it is `handle`d.
     ///
     /// ## `handle`: `FnMut(Self::Error) -> Result<(), UError>`
@@ -272,6 +354,27 @@ pub trait FallibleAsyncIterator {
         Self: Sized,
     {
         Retry { iter: self, handle }
+    }
+
+    /// When the iterator returns an error case, automatically retry the call if it is `handle`d asynchronously.
+    ///
+    /// This function is similar to [`retry`][`FallibleAsyncIterator::retry`], except the `handle` function can be
+    /// `async`. This is useful for implementing things like backoffs.
+    ///
+    /// ## `handle`: `FnMut(Self::Error) -> impl Future<Output = Result<(), UError>>`
+    /// Attempt to handle the error, returning `Ok(())` if the error is handled and the iterator should retry. If it can
+    /// not be handled, `Err(ex)` is returned and the `next` will return this error.
+    fn retry_async<H, F>(self, handle: H) -> RetryAsync<Self, H, F>
+    where
+        Self: Sized,
+        H: FnMut(Self::Error) -> F,
+        F: Future,
+    {
+        RetryAsync {
+            iter: self,
+            handle,
+            handling_future: None,
+        }
     }
 
     /// Extract the `Err` from item and expose it as the `Error` type.
