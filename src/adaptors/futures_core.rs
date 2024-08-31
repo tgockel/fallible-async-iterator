@@ -13,6 +13,17 @@ pub trait FuturesCoreStreamExt {
     fn into_fallible_async<T>(self) -> FuturesCoreStreamAdaptor<Self>
     where
         Self: Stream<Item = T> + Sized;
+
+    /// Change a [`Stream<Item = Result<T, E>>`][`futures_core::Stream`] to a
+    /// [`FallibleAsyncIterator<Item = T, Error = E>`][`FallibleAsyncIterator`].
+    fn transpose_into_fallible_async<T, E>(self) -> crate::Transpose<FuturesCoreStreamAdaptor<Self>>
+    where
+        Self: Stream<Item = Result<T, E>> + Sized,
+    {
+        crate::Transpose {
+            iter: self.into_fallible_async(),
+        }
+    }
 }
 
 impl<S: Stream> FuturesCoreStreamExt for S {

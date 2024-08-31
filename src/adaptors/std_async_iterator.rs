@@ -11,13 +11,24 @@ use crate::FallibleAsyncIterator;
 pub trait AsyncIteratorExt {
     fn into_fallible_async<T>(self) -> AsyncIteratorAdaptor<Self>
     where
-        Self: Iterator<Item = T> + Sized;
+        Self: AsyncIterator<Item = T> + Sized;
+
+    /// Change an [`AsyncIterator<Item = Result<T, E>>`][`std::async_iter::AsyncIterator`] to a
+    /// [`FallibleAsyncIterator<Item = T, Error = E>`][`FallibleAsyncIterator`].
+    fn transpose_into_fallible_async<T, E>(self) -> crate::Transpose<AsyncIteratorAdaptor<Self>>
+    where
+        Self: AsyncIterator<Item = Result<T, E>> + Sized,
+    {
+        crate::Transpose {
+            iter: self.into_fallible_async(),
+        }
+    }
 }
 
 impl<I: AsyncIterator> AsyncIteratorExt for I {
     fn into_fallible_async<T>(self) -> AsyncIteratorAdaptor<Self>
     where
-        Self: Iterator<Item = T> + Sized,
+        Self: AsyncIterator<Item = T> + Sized,
     {
         AsyncIteratorAdaptor { iter: self }
     }

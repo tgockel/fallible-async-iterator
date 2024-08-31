@@ -6,11 +6,22 @@ use core::{
 
 use crate::FallibleAsyncIterator;
 
-/// Extension methods for `std::iter::Iterator`.
+/// Extension methods for [`std::iter::Iterator`].
 pub trait IteratorExt {
     fn into_fallible_async<T>(self) -> IteratorAdaptor<Self>
     where
         Self: Iterator<Item = T> + Sized;
+
+    /// Change an [`Iterator<Item = Result<T, E>>`][`std::iter::Iterator`] to a
+    /// [`FallibleAsyncIterator<Item = T, Error = E>`][`FallibleAsyncIterator`].
+    fn transpose_into_fallible_async<T, E>(self) -> crate::Transpose<IteratorAdaptor<Self>>
+    where
+        Self: Iterator<Item = Result<T, E>> + Sized,
+    {
+        crate::Transpose {
+            iter: self.into_fallible_async(),
+        }
+    }
 }
 
 impl<I: Iterator> IteratorExt for I {
@@ -22,7 +33,7 @@ impl<I: Iterator> IteratorExt for I {
     }
 }
 
-/// Adapts a `std::iter::Iterator` into a [`FallibleAsyncIterator`].
+/// Adapts a [`std::iter::Iterator`] into a [`FallibleAsyncIterator`].
 pub struct IteratorAdaptor<I> {
     iter: I,
 }
